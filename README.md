@@ -1,3 +1,3 @@
 # maize-fractionation
 
-See other [README](maize-fractionation/doc/README.md)
+See other [README](doc/README.md)
