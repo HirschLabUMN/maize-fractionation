@@ -1,0 +1,185 @@
+#!/usr/bin/Rscript
+library(DESeq2)
+library(tidyverse)
+setwd("/home/hirschc1/shared/projects/fractionation/cache/rnaseq")
+
+args <- commandArgs(trailingOnly=TRUE)
+
+# Read in count matrix data:
+data<-read.delim(file=args[1], head=T, sep="\t", row.names=1)
+#data<-read.delim(file="/home/hirschc1/shared/projects/fractionation/cache/rnaseq/b73_ph207_CDS_htseq-count-matrix-len-corrected.txt", head=T, sep="\t", row.names=1)
+colnames(data) <- c("B73bd1","B73bd2","B73bd3",
+"B73cp1","B73cp2","B73cp3",
+"B73gk1","B73gk2","B73gk3",
+"B73rt1","B73rt2", "B73rt3",
+"B73sd1","B73sd2","B73sd3",
+"B73st1","B73st2","B73st3",
+"PH207bd1","PH207bd2",
+"PH207cp1","PH207cp2",
+"PH207gk1","PH207gk2",
+"PH207rt1","PH207rt2",
+"PH207sd1","PH207sd2",
+"PH207st1","PH207st2")
+# Set up sample names
+v4sample <- c(
+"B73bd1","B73bd2","B73bd3",
+"B73cp1","B73cp2","B73cp3",
+"B73gk1","B73gk2","B73gk3",
+"B73rt1","B73rt2", "B73rt3",
+"B73sd1","B73sd2","B73sd3",
+"B73st1","B73st2","B73st3",
+"PH207bd1","PH207bd2",
+"PH207cp1","PH207cp2",
+"PH207gk1","PH207gk2",
+"PH207rt1","PH207rt2",
+"PH207sd1","PH207sd2",
+"PH207st1","PH207st2")
+
+genotype <- as.factor(c(rep("b73", 18), rep("ph207", 12)))
+reps <- as.factor(c(rep(1:3, 6),rep(1:2,6)))
+tissue <- as.factor(c(rep(c("BD", "CP", "GK", "RT", "SD", "ST"), each=3),rep(c("BD", "CP", "GK", "RT", "SD", "ST"), each=2)))
+
+v4colData <- data.frame(v4sample, genotype, tissue, reps, row.names=1)
+colnames(v4colData) <- c("genotype", "tissue", "rep")
+
+# Get normalized counts
+dds<-DESeqDataSetFromMatrix(countData=data, colData=v4colData, design = ~ genotype + tissue + rep)
+dds <- dds[ rowSums(counts(dds)) > 1, ]
+v4dds<-estimateSizeFactors(dds)
+
+raw_counts <- counts(v4dds, normalized=TRUE)
+write.table(raw_counts, file=args[2], sep="\t", quote=FALSE)
+# write.table(raw_counts, file="b73_ph207_CDS_htseq-count-matrix-len-corrected_htseq-normalized.txt", sep="\t", quote=FALSE)
+
+avrCounts<- as.data.frame(raw_counts) %>%
+  rownames_to_column() %>%
+  rename("Gene"=rowname) %>%
+  group_by(Gene) %>%
+  summarise(b73Bd = mean(c(B73bd1,B73bd2,B73bd3)),
+            b73Cp = mean(c(B73cp1, B73cp2,B73cp3)),
+            b73Gk = mean(c(B73gk1,B73gk2,B73gk3)),
+            b73Rt = mean(c(B73rt1, B73rt2,B73rt3)),
+            b73Sd = mean(c(B73sd1,B73sd2,B73sd3)),
+            b73St = mean(c(B73st1,B73st2,B73st3)),
+	    			ph207Bd = mean(c(PH207bd1,PH207bd2)),
+	    			ph207Cp = mean(c(PH207cp1, PH207cp2)),
+	    			ph207Gk = mean(c(PH207gk1,PH207gk2)),
+	    			ph207Rt = mean(c(PH207rt1, PH207rt2)),
+	    			ph207Sd = mean(c(PH207sd1,PH207sd2)),
+	    			ph207St = mean(c(PH207st1,PH207st2))
+ 	)
+
+write.table(avrCounts, file="b73_ph207_CDS_htseq-count-matrix-len-corrected_htseq-normalized-avr.txt", sep="\t", quote=F,row.names=F)
+
+cor<-cor(raw_counts, method="pearson", use="pairwise.complete.obs")
+dist<-(as.dist(1-cor)/2)
+pdf(file="final_sample_dendrogram.pdf")
+plot(hclust(dist))
+dev.off()
+
+# Create submatrices
+v4blade<-data[,c(1:3,19,20)]
+v4cortical<-data[,c(4:6,21,22)]
+v4gk<-data[,c(7:9,23,24)]
+v4root<-data[,c(10:12,25,26)]
+v4seedling<-data[,c(13:15,27,28)]
+v4stele<-data[,c(16:18,29,30)]
+
+# Make column data
+v4bladecolData <- data.frame(v4sample[c(1:3,19,20)], genotype[c(1:3,19,20)], tissue[c(1:3,19,20)], reps[c(1:3,19,20)], row.names=1)
+colnames(v4bladecolData) <- c("genotype", "tissue", "reps")
+v4corticalcolData <- data.frame(v4sample[c(4:6,21,22)], genotype[c(4:6,21,22)], tissue[c(4:6,21,22)], reps[c(4:6,21,22)], row.names=1)
+colnames(v4corticalcolData) <- c("genotype", "tissue", "reps")
+v4gkcolData<- data.frame(v4sample[c(7:9,23,24)], genotype[c(7:9,23,24)], tissue[c(7:9,23,24)], reps[c(7:9,23,24)], row.names=1)
+colnames(v4gkcolData) <- c("genotype", "tissue", "reps")
+v4rootcolData<- data.frame(v4sample[c(10:12,25,26)], genotype[c(10:12,25,26)], tissue[c(10:12,25,26)], reps[c(10:12,25,26)], row.names=1)
+colnames(v4rootcolData) <- c("genotype", "tissue", "reps")
+v4seedlingcolData<- data.frame(v4sample[c(13:15,27,28)], genotype[c(13:15,27,28)], tissue[c(13:15,27,28)], reps[c(13:15,27,28)], row.names=1)
+colnames(v4seedlingcolData) <- c("genotype", "tissue", "reps")
+v4stelecolData<- data.frame(v4sample[c(16:18,29,30)], genotype[c(16:18,29,30)], tissue[c(16:18,29,30)], reps[c(16:18,29,30)],  row.names=1)
+colnames(v4stelecolData) <- c("genotype", "tissue", "reps")
+
+# Create DESeq2 dataset
+v4bladedds <- DESeqDataSetFromMatrix(countData=v4blade, colData=v4bladecolData, design = ~ genotype )
+v4corticaldds<-DESeqDataSetFromMatrix(countData=v4cortical, colData=v4corticalcolData, design = ~ genotype )
+v4gkdds<-DESeqDataSetFromMatrix(countData=v4gk, colData=v4gkcolData, design = ~ genotype )
+v4rootdds<-DESeqDataSetFromMatrix(countData=v4root, colData=v4rootcolData, design = ~ genotype )
+v4seedlingdds<-DESeqDataSetFromMatrix(countData=v4seedling, colData=v4seedlingcolData, design = ~ genotype )
+v4steledds<-DESeqDataSetFromMatrix(countData=v4stele, colData=v4stelecolData, design = ~ genotype )
+
+# Pre-filter: get rid of low count genes (reduces memory size, increase speed of transformation and testing)
+v4bladedds<-v4bladedds[ rowSums(counts(v4bladedds)) > 10, ]
+v4corticaldds<-v4corticaldds[ rowSums(counts(v4corticaldds)) > 10, ]
+v4gkdds<-v4gkdds[ rowSums(counts(v4gkdds)) > 10, ]
+v4rootdds<-v4rootdds[ rowSums(counts(v4rootdds)) > 10, ]
+v4seedlingdds<-v4seedlingdds[ rowSums(counts(v4seedlingdds)) > 10, ]
+v4steledds<-v4steledds[ rowSums(counts(v4steledds)) > 10, ]
+
+# Run DESeq2
+## Blade ------------------------------------------------------------------------------
+v4bladedds<-DESeq(v4bladedds)
+v4bdres<-results(v4bladedds)
+bdsubset <- subset(v4bdres, baseMean > 5 & abs(log2FoldChange) >= 1.5 & padj < 0.05 )
+write.table(bdsubset, file="bd_filtrDESeqmRNA_lencorrect.txt", sep="\t")
+## Cortical Parenchyma ----------------------------------------------------------------
+v4corticaldds<-DESeq(v4corticaldds)
+v4cpres<-results(v4corticaldds)
+cpsubset <- subset(v4cpres, baseMean > 5 & abs(log2FoldChange) >= 1.5 & padj < 0.05 )
+write.table(cpsubset, file="cp_filtrDESeqmRNA_lencorrect.txt", sep="\t")
+## Germinating Kernel -----------------------------------------------------------------
+v4gkdds<-DESeq(v4gkdds)
+v4gkres<-results(v4gkdds)
+gksubset <- subset(v4gkres, baseMean > 5 & abs(log2FoldChange) >= 1.5 & padj < 0.05 )
+write.table(gksubset, file="gk_filtrDESeqmRNA_lencorrect.txt", sep="\t")
+## Root Tip ---------------------------------------------------------------------------
+v4rootdds<-DESeq(v4rootdds)
+v4rtres<-results(v4rootdds)
+rtsubset <- subset(v4rtres, baseMean > 5 & abs(log2FoldChange) >= 1.5 & padj < 0.05 )
+write.table(rtsubset, file="rt_filtrDESeqmRNA_lencorrect.txt", sep="\t")
+## Seedling ---------------------------------------------------------------------------
+v4seedlingdds<-DESeq(v4seedlingdds)
+v4sdres<-results(v4seedlingdds)
+sdsubset <- subset(v4sdres, baseMean > 5 & abs(log2FoldChange) >= 1.5 & padj < 0.05 )
+write.table(sdsubset, file="sd_filtrDESeqmRNA_lencorrect.txt", sep="\t")
+## Stele ------------------------------------------------------------------------------
+v4steledds<-DESeq(v4steledds)
+v4steleres<-results(v4steledds)
+stsubset <- subset(v4steleres, baseMean > 5 & abs(log2FoldChange) >= 1.5 & padj < 0.05 )
+write.table(stsubset, file="st_filtrDESeqmRNA_lencorrect.txt", sep="\t")
+
+###################
+### DIAGNOSTICS ###
+###################
+
+## Make sample heatmap
+
+# rld <- rlog(dds, blind=FALSE)
+# sampleDists <- dist( t( assay(rld) ) )
+# sampleDistMatrix <- as.matrix(sampleDists)
+#
+# pdf(file="/home/hirschc1/shared/projects/fractionation/graphs/RNAseq_normalized_mRNA_logTransHeatmap.pdf")
+# df <- as.data.frame(colData(v4dds)[,c("genotype","rep","tissue")])
+# pheatmap(sampleDistMatrix, cluster_rows=FALSE, show_rownames=FALSE, cluster_cols=FALSE, annotation_col=df, main = "RNAseq Sample Relationships from Counts\nEuclidean distance of regularized log transformation")
+# dev.off()
+# ## Make sample PCA
+# data <- plotPCA(rld, intgroup=c("genotype", "tissue"), returnData=TRUE)
+# percentVar <- round(100 * attr(data, "percentVar"))
+# pdf(file="/home/hirschc1/shared/projects/fractionation/graphs/RNAseq_normalized_mRNA_PCA.pdf")
+# ggplot(data, aes(PC1, PC2, color=tissue, shape=genotype)) +
+# geom_point(size=3) +
+# xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+# ylab(paste0("PC2: ",percentVar[2],"% variance")) +
+# coord_fixed() +
+# labs(title="RNAseq Sample Relationship PCA from Counts\nRegularized Log Transformed")
+# dev.off()
+# ## Make sample dendrogram
+# pdf(file="/home/hirschc1/shared/projects/fractionation/graphs/RNAseq_normalized_mRNA_samplePearsonDendrogram.pdf")
+# #hc <- hclust(dist(t(v4_norm)))
+# den <- hclust(sampleDists)
+# plot(den)
+# dev.off()
+## Make heatmap from pearson correlations
+# pdf(file="/home/hirschc1/shared/projects/fractionation/graphs/RNAseq_normalized_mRNA_samplePearsonHeatmap.pdf")
+# my_cor <- cor(as.matrix(rld), method="pearson")
+# pheatmap(my_cor, cluster_rows=TRUE, show_rownames=TRUE, cluster_cols=TRUE)
+# dev.off()

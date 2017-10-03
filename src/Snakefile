@@ -1,0 +1,31 @@
+DIR=config["dir"]["cache"] + "/coge"
+DATA=config["dir"]["data"] + "/coge"
+CODE=config["dir"]["munge"]
+RUNS=[ 'B73vSb', 'B73vOs', 'PH207vSb', 'PH207vOs' ]
+ANCHORS= [ 'Sb', 'Os' ]
+SAMPLES = [ 'B73', 'PH207' ]
+
+# Get the date
+from datetime import datetime
+i = datetime.now()
+TIME = i.strftime('%Y-%m-%d')
+
+import glob
+
+rule all:
+	input:
+		expand("{dir}/{run}_quota_aln.txt", run=RUNS,dir=DIR),
+		expand("{dir}/{run}/{run}_designated.txt", run=RUNS, dir=DIR)
+
+rule filter_quota_align:
+	input: DATA+"/{run}/{run}_quota-alignment.txt"
+	output: "{DIR}/{run}_quota_aln.txt"
+	run:
+		shell("perl {CODE}/filter_quota_align.pl -i {input} -o {output}")
+
+rule fetch_syntelogs:
+	input: DATA+"/{run}/{run}_final-syntenic-gene-set.txt"
+	output: "{DIR}/{run}/{run}_designated.txt"
+	params: ref = '{run}'
+	run:
+		shell("perl {CODE}/filter_condensed_syntelog.pl -i {input} -o {output[0]} -c {params.ref}")

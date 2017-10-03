@@ -1,0 +1,95 @@
+DIR=config["dir"]["cache"] + "/coge"
+DATA=config["dir"]["data"]
+SCRATCH=config["dir"]["scratch"]
+CODE=config["dir"]["munge"]
+ANCHORS= [ 'Sb', 'Os' ]
+SAMPLES = [ 'B73', 'PH207' ]
+
+# Get the date
+from datetime import datetime
+i = datetime.now()
+TIME = i.strftime('%Y-%m-%d')
+
+import glob
+
+rule all:
+	input:
+		expand("{dir}/Zm-{anchr}_designated.txt",dir=SCRATCH,anchr=ANCHORS),
+		expand("{dir}/Os_genes_to_add.txt",dir=SCRATCH),
+		expand("{dir}/Zm.vs.Sb_designated_wOsgenes.txt",dir=SCRATCH),
+		expand("{dir}/masterFile.txt",dir=SCRATCH),
+		expand("{dir}/tblastx_results.txt",dir=SCRATCH),
+		expand("{dir}/masterFile_no-duplicates.txt",dir=SCRATCH)
+
+# Combine raw CoGe assignments from B73 vs Sb and PH207 vs Sb together
+rule combine_designates:
+	input:
+		sample1=DIR + "/" + SAMPLES[0] + 'v{anchr}/' + SAMPLES[0] + 'v{anchr}_designated.txt',
+		sample2=DIR + "/" + SAMPLES[1]  + 'v{anchr}/' + SAMPLES[1] + 'v{anchr}_designated.txt',
+	output: "{DIR}/Zm-{anchr}_designated.txt"
+	run:
+		shell("perl {CODE}/combine_condensed_syntelog_files.pl -i {input.sample1} -p {input.sample2} -o {output}")
+
+# Append rice orthologs to the list created above if the sorghum gene has putatively been lost
+rule addOSgenes:
+	input:
+		prim = "{DIR}/Zm-" + ANCHORS[0] + "_designated.txt",
+		sec = "{DIR}/Zm-" + ANCHORS[1] + "_designated.txt"
+	output: "{DIR}/Os_genes_to_add.txt", "{DIR}/Zm.vs.Sb_designated_wOsgenes.txt"
+	run:
+		shell("perl {CODE}/add_OS_genes_to_combined_syntenlog_file.pl -i {input.prim} -p {input.sec} -o {output[0]}")
+		shell("cat {input.prim} {output[0]} >> {output[1]}")
+
+# Try to get most representative tandem duplicate
+rule parseTandems:
+	input: DATA+'/tandem_assignments/B73_PH207_All_Tandem_Fractionation_Representative_wStatus.txt.tmp', rules.addOSgenes.output[1]
+	params:
+		master=rules.addOSgenes.output[1]
+	output: "{DIR}/masterFile.txt"
+	run:
+		shell("perl {CODE}/parse_tandem_duplicates_from_tom.pl -i {input[0]} -m {params.master} -o {output}")
+
+# Get duplicate genes from the master file and attempt to resolve
+rule tblastx:
+    input: rules.parseTandems.output
+	params:
+		b73 = "b73.out",
+		ph207 = "ph207.out",
+		sb = "sb.out",
+		os = "os.out",
+		clusterfile = "duplicate_clusters.txt",
+		b73_cds = config["db"]["b73"]["cds"],
+		ph207_cds = config["db"]["ph207"]["cds"],
+		sb_cds = config["db"]["sb"]["cds"],
+		os_cds = config["db"]["os"]["cds"]
+	output: "{DIR}/tblastx_results.txt"
+	shell:
+		"""
+		perl {CODE}/filter_duplicates.pl -i {input} -c {params.clusterfile} -b {params.b73} -p {params.ph207} -s {params.sb} -o {params.os}
+		blastdbcmd -db {params.os_cds} -entry_batch {params.os} | sed 's/lcl|//g' > {params.os}.fa
+		blastdbcmd -db {params.sb_cds} -entry_batch {params.sb} | sed 's/lcl|//g' > {params.sb}.fa
+		blastdbcmd -db {params.b73_cds} -entry_batch {params.b73} | sed 's/lcl|//g' > {params.b73}.fa
+		blastdbcmd -db {params.ph207_cds} -entry_batch {params.ph207} | sed 's/lcl|//g' > {params.ph207}.fa
+		cat {params.os}.fa {params.sb}.fa >> anchor_duplicates.fa
+		perl {CODE}/run_tblastx.pl -c {params.clusterfile} -s anchor_duplicates.fa -b {params.b73}.fa -p {params.ph207}.fa -o {output}
+		"""
+
+# Parse the output of the tblastx results
+rule parse_tblastx:
+	input: rules.tblastx.output, rules.parseTandems.output
+	output: "{DIR}/masterFile_no-duplicates.txt"
+	run:
+		shell("perl {CODE}/parse_tblastx_results.pl -i {input[0]} -m {input[1]} -o {output}")
+
+# 
+rule update_storable:
+	input: rules.parse_tblastx.output
+	output: "{DIR}/phony.txt"
+	params:
+		b73 = config["db"]["b73"]["storable"],
+		ph207 = config["db"]["ph207"]["storable"],
+		sb = config["db"]["sb"]["storable"],
+		os = config["db"]["os"]["storable"]
+	run:
+		shell("perl {CODE}/update-storable.pl -i {input} -b {params.b73} -p {params.ph207} -s {params.sb} -o {params.os}")
+		shell("touch {output}")

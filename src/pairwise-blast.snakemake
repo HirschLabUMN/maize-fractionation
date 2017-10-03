@@ -1,0 +1,66 @@
+#snakemake -p -s pairwise-blast.snakemake -F --configfile config.yml --cluster-config cluster.yaml --cluster "qsub -l {cluster.l} -m {cluster.m} -N {cluster.N} -r {cluster.r} -V" --jobs 8
+# This is the minimumally process file output from SynMap - *Make sure to update if needed*
+INPUT=config["coge"]["master"]
+# Get the script containing directroy from the configuration file
+MUNGE=config["dir"]["munge"]
+# Get the location of the scratch directory that will house all of the temp files from the configuration file
+SCRATCH=config["dir"]["scratch"]
+SAMPLES=['B73vB73', 'PH207vPH207', 'B73vPH207']
+GENOS=['b73', 'ph207']
+
+# Load in some modules
+def get_query(wildcards):
+	if (wildcards.RUN == "B73vB73"):
+		idx = config["db"]["b73"]["blast"],
+	elif (wildcards.RUN == "PH207vPH207"):
+		idx = config["db"]["ph207"]["blast"],
+	elif (wildcards.RUN == "B73vPH207"):
+		idx = config["db"]["b73"]["blast"],
+	elif (wildcards.RUN == "PH207vB73"):
+		idx = config["db"]["ph207"]["blast"]
+	return(idx)
+def get_subj(wildcards):
+	if (wildcards.RUN == "B73vB73"):
+		idx = config["db"]["b73"]["blast"],
+	elif (wildcards.RUN == "PH207vPH207"):
+		idx = config["db"]["ph207"]["blast"],
+	elif (wildcards.RUN == "B73vPH207"):
+		idx = config["db"]["ph207"]["blast"],
+	elif (wildcards.RUN == "PH207vB73"):
+		idx = config["db"]["b73"]["blast"],
+	return(idx)
+
+# This defines all the output files to be generated in each step.
+rule all:
+	input:
+		expand('{dir}/{RUN}_ids.txt', RUN=SAMPLES,dir=SCRATCH),
+		expand('{dir}/{RUN}_bl2seq-parsed.txt', RUN=SAMPLES,dir=SCRATCH),
+		expand('{dir}/{RUN}_blast-parsed-scored.txt', RUN=SAMPLES,dir=SCRATCH),
+		expand('{dir}/{RUN}_blsn-target-file.txt', RUN=SAMPLES,dir=SCRATCH)
+
+rule prep:
+	input: INPUT
+	output: "{dir}/{RUN}_ids.txt"
+	params:
+		myrun = "{RUN}"
+	run:
+		shell("perl {MUNGE}/prep_for_blast.pl -i {input} -r {params.myrun} -o {output}")
+
+rule bl2seq:
+	input: rules.prep.output
+	params:
+		queryIdx = get_query,
+		subjIdx = get_subj
+	output: "{dir}/{RUN}_bl2seq-parsed.txt"
+	run:
+		shell("perl {MUNGE}/pairwise-blast.pl -i {input} -q {params.queryIdx} -s {params.subjIdx} -o {output} -r {wildcards.RUN}")
+
+rule pairwiseScore:
+	input: rules.bl2seq.output
+	output: "{dir}/{RUN}_blast-parsed-scored.txt", "{dir}/{RUN}_blsn-target-file.txt"
+	params:
+		mode = "bls2seq",
+		run = "{RUN}"
+	run:
+		shell("touch {output[1]}")
+		shell("perl {MUNGE}/score_bl2seq_output.pl -i {input} -o {output[0]} -m {params.mode} -r {params.run} -t {output[1]}")

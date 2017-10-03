@@ -1,0 +1,178 @@
+# This is the minimumally process file output from SynMap.
+# Get the script containing directroy from the configuration file
+INPUT="/scratch.global/broha006/projects/frac/master_updated.txt"
+MUNGE=config["dir"]["munge"]
+# Get the location of the scratch directory that will house all of the temp files from the configuration file
+SCRATCH=config["dir"]["scratch"]
+DIR=config["dir"]["cache"] + "/coge/"
+GENOS=['b73', 'ph207']
+SAMPLES=['PH207vB73', 'B73vPH207']
+os.chdir("/scratch.global/broha006/projects/frac")
+# Load in some modules
+#snakemake -p -s genomewide-blast.snakemake -F --configfile config.yml --cluster-config cluster.yaml --cluster "qsub -l {cluster.l} -m {cluster.m} -N {cluster.N} -r {cluster.r} -V" --jobs 2
+#
+def get_query(wildcards):
+	if (wildcards.GENO == "B73vB73"):
+		idx = "b73",
+	elif (wildcards.GENO == "PH207vPH207"):
+		idx = "ph207",
+	elif (wildcards.GENO == "B73vPH207"):
+		idx = "b73",
+	elif (wildcards.GENO == "PH207vB73"):
+		idx = "ph207"
+	return(idx)
+def get_ref(wildcards):
+    if (wildcards.GENO == "B73vB73"):
+        ref = config["db"]["b73"]["genome"],
+    elif (wildcards.GENO == "PH207vPH207"):
+        ref = config["db"]["ph207"]["genome"]
+    elif ( wildcards.GENO == "B73vPH207" ):
+        ref = config["db"]["ph207"]["genome"],
+    elif ( wildcards.GENO == "PH207vB73" ):
+        ref = config["db"]["b73"]["genome"]
+    return(ref)
+def get_subj(wildcards):
+	if (wildcards.GENO == "B73vB73"):
+		idx = "b73",
+	elif (wildcards.GENO == "PH207vPH207"):
+		idx = "ph207",
+	elif (wildcards.GENO == "B73vPH207"):
+		idx = "ph207",
+	elif (wildcards.GENO == "PH207vB73"):
+		idx = "b73"
+	return(idx)
+def get_pep(wildcards):
+	if (wildcards.GENO == "B73vB73"):
+		idx = config["db"]["b73"]["prot"],
+	elif (wildcards.GENO == "PH207vPH207"):
+		idx = config["db"]["ph207"]["prot"],
+	elif (wildcards.GENO == "B73vPH207"):
+		idx = config["db"]["b73"]["prot"],
+	elif (wildcards.GENO == "PH207vB73"):
+		idx = config["db"]["ph207"]["prot"]
+	return(idx)
+# This defines all the output files to be generated in each step.
+rule all:
+    input:
+        expand('{dir}/masterFile_parsed_coordinates.txt', dir=SCRATCH),
+        expand('{dir}/tblastx_results.txt', dir=SCRATCH),
+        expand('{dir}/masterFile_no-duplicates_r3.txt',dir=SCRATCH),
+        expand('{dir}/{GENO}_df-gene-list.fasta', GENO=SAMPLES,dir=SCRATCH),
+        expand('{dir}/{GENO}_blastp-out.txt', GENO=SAMPLES,dir=SCRATCH),
+        expand('{dir}/{GENO}.phoney',GENO=SAMPLES,dir=SCRATCH),
+        expand("{dir}/{GENO}_percentNs.txt",GENO=SAMPLES,dir=SCRATCH)
+
+rule replace_coords:
+    input: INPUT
+    output: "{dir}/masterFile_parsed_coordinates.txt"
+    params:
+        b73_gff = config["genome"]["b73"]["gff"],
+        ph207_gff = config["genome"]["ph207"]["gff"]
+    shell:
+        """
+        cut -f 2 {input} | grep ":" > {wildcards.dir}/b73_coordinates2.txt
+        cut -f 3 {input} | grep ":" >> {wildcards.dir}/b73_coordinates2.txt
+        cut -f 4 {input} | grep ":" > {wildcards.dir}/ph207_coordinates2.txt
+        cut -f 5 {input} | grep ":" >> {wildcards.dir}/ph207_coordinates2.txt
+        awk -F "[:-]" '{{printf $1"\\t"$2"\\t"$3"\\t"$0"\\n"}}' {wildcards.dir}/b73_coordinates2.txt | bedtools intersect -wa -wb -a {params.b73_gff} -b - | awk '$3 == "gene"' | cut -f 9,13 | gawk -F "\\t" 'match($0,/ID=(Zm00001d[0-9]+)/,a) {{print a[1]"\\t"$2}}' > {wildcards.dir}/b73_coordinate-overlap.txt
+        perl -i -pe 's/chr0//g' {wildcards.dir}/ph207_coordinates2.txt
+        perl -i -pe 's/chr//g' {wildcards.dir}/ph207_coordinates2.txt
+        awk '{{print "chr0"$0}}' {wildcards.dir}/ph207_coordinates2.txt > {wildcards.dir}/ph207_coordinates2.txt2
+        perl -i -pe 's/chr010/chr10/g' {wildcards.dir}/ph207_coordinates2.txt2
+        awk -F "[:-]" '{{printf $1"\\t"$2"\\t"$3"\\t"$0"\\n"}}' {wildcards.dir}/ph207_coordinates2.txt2 | bedtools intersect -wa -wb -a {params.ph207_gff} -b - | awk '$3 == "gene"' | cut -f 9,13 | gawk -F "\\t" 'match($0,/ID=(Zm00008a[0-9]+)/,a) {{print a[1]"\t"$2}}' > {wildcards.dir}/ph207_coordinate-overlap.txt
+        perl /home/hirschc1/shared/projects/fractionation/munge/incorporate_coord_fill_qc.pl -i {wildcards.dir} -m {input} -o {output}
+        """
+
+rule run_tblastx:
+    input: rules.replace_coords.output
+    params:
+        b73 = "b73.out",
+        ph207 = "ph207.out",
+        sb = "sb.out",
+        os = "os.out",
+        clusterfile = "duplicate_clusters2.txt",
+        b73_cds = config["db"]["b73"]["cds"],
+        ph207_cds = config["db"]["ph207"]["cds"],
+        sb_cds = config["db"]["sb"]["cds"],
+        os_cds = config["db"]["os"]["cds"]
+    output: "{dir}/tblastx_results2.txt"
+    shell:
+        """
+        perl {MUNGE}/filter_duplicates.pl -i {input} -c {params.clusterfile} -b {params.b73} -p {params.ph207} -s {params.sb} -o {params.os}
+        blastdbcmd -db {params.os_cds} -entry_batch {params.os} | sed 's/lcl|//g' > {params.os}.fa
+        blastdbcmd -db {params.sb_cds} -entry_batch {params.sb} | sed 's/lcl|//g' > {params.sb}.fa
+        blastdbcmd -db {params.b73_cds} -entry_batch {params.b73} | sed 's/lcl|//g' > {params.b73}.fa
+        blastdbcmd -db {params.ph207_cds} -entry_batch {params.ph207} | sed 's/lcl|//g' > {params.ph207}.fa
+        cat {params.os}.fa {params.sb}.fa >> anchor_duplicates.fa
+        perl {MUNGE}/run_tblastx.pl -c {params.clusterfile} -s anchor_duplicates.fa -b {params.b73}.fa -p {params.ph207}.fa -o {output}
+        """
+
+rule parse_tblastx:
+	input: rules.run_tblastx.output, rules.replace_coords.output
+	output: "{dir}/masterFile_no-duplicates_r3.txt"
+	run:
+		shell("perl {MUNGE}/parse_tblastx_results.pl -i {input[0]} -m {input[1]} -o {output}")
+
+rule update_storable:
+	input: rules.parse_tblastx.output
+	output: "{dir}/phony.txt"
+	params:
+		b73 = config["db"]["b73"]["storable"],
+		ph207 = config["db"]["ph207"]["storable"],
+		sb = config["db"]["sb"]["storable"],
+		os = config["db"]["os"]["storable"]
+	run:
+		shell("perl {MUNGE}/update-storable.pl -i {input} -b {params.b73} -p {params.ph207} -s {params.sb} -o {params.os}")
+		shell("touch {output}")
+
+rule makeDB:
+    input:  rules.parse_tblastx.output
+    output: "{dir}/{GENO}_df-gene-list.fasta"
+    params:
+        pep = get_pep,
+        query = get_query
+    shell:
+        """
+        perl {MUNGE}/get_scaffold_gene_list.pl -i {params.query} -o {params.query}_scaffold-genes.txt
+        blastdbcmd -db {params.pep} -entry_batch {params.query}_scaffold-genes.txt > {params.query}_scaffold-genes.fasta
+        makeblastdb -dbtype prot -parse_seqids -in {params.query}_scaffold-genes.fasta -out {params.query}_scaffold_blsDB
+        perl {MUNGE}/get_dfg_gene_list.pl -i {params.query} -m {input} -o {params.query}_df-gene-list.txt
+        blastdbcmd -db {params.pep} -entry_batch {params.query}_df-gene-list.txt > {output}
+        """
+
+rule blastp:
+    input: rules.makeDB.output
+    output: "{dir}/{GENO}_blastp-out.txt"
+    params:
+        query = get_subj
+    run:
+        shell("{MUNGE}/run_blastp.pl -p {input} -d {params.query}_scaffold_blsDB -t {wildcards.GENO}.tmp -o {output}")
+
+rule getScaffoldHits:
+    input: rules.blastp.output
+    output: "{dir}/{GENO}.phoney"
+    params:
+        master = "{dir}/masterFile_no-duplicates_r3.txt"
+    shell:
+        """
+        perl {MUNGE}/incorporate_scaffold_hits.pl -i {input} -m {params.master}
+        touch {output}
+        """
+
+rule gapSetup:
+	input: rules.getScaffoldHits.output
+	output: "{dir}/{GENO}_percentNs.txt"
+	params:
+		query = get_query,
+		master = "masterFile_no-duplicates_r3.txt",
+		reference = get_ref,
+		windowSize = "5000",
+		perNcutoff = "0.40"
+	shell:
+		"""
+		perl {MUNGE}/get_dfg_gene_list.pl -i {params.query} -m {params.master} -o {params.query}_df-gene-list2.txt
+		perl {MUNGE}/get_coordinates_for_gap_analysis.pl -i {params.query}_df-gene-list2.txt -o {params.query}_DFG_coordinates.txt -c {wildcards.GENO}
+		bedtools getfasta -fi {params.reference} -bed {params.query}_DFG_coordinates.txt -fo {params.query}_DFG_coordinates.fa -name
+		perl {MUNGE}/facomp.pl {params.query}_DFG_coordinates.fa > {output}
+		perl {MUNGE}/incorporate_gap_positions.pl -i {output} -m {params.master} -c {params.perNcutoff}
+		"""

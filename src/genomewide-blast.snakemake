@@ -1,0 +1,107 @@
+# This is the minimumally processed file output from SynMap.
+INPUT=config["coge"]["master"]
+# Get the script containing directroy from the configuration file
+MUNGE=config["dir"]["munge"]
+# Get the location of the scratch directory that will house all of the temp files from the configuration file
+SCRATCH=config["dir"]["scratch"]
+# Hardcode the genotypes/subgenomes to be processed
+# Later an output will be produced that has the ids for each genotype/subgenome combination. Define these future file names here.
+SAMPLES=['B73vB73', 'PH207vB73', 'PH207vPH207', 'B73vPH207']
+#SAMPLES=['PH207vPH207', 'B73vB73']
+GENOS=['b73', 'ph207']
+# Load in some modules
+#snakemake -p -s genomewide-blast.snakemake -F --configfile config.yml --cluster-config cluster.yaml --cluster "qsub -l {cluster.l} -m {cluster.m} -N {cluster.N} -r {cluster.r} -V" --jobs 2
+
+def get_query(wildcards):
+	if (wildcards.RUN == "B73vB73"):
+		idx =config["db"]["b73"]["blast"]
+	elif (wildcards.RUN == "PH207vPH207"):
+		idx =config["db"]["ph207"]["blast"]
+	elif (wildcards.RUN == "B73vPH207"):
+		idx =config["db"]["b73"]["blast"]
+	elif (wildcards.RUN == "PH207vB73"):
+		idx =config["db"]["ph207"]["blast"]
+	return(idx)
+def get_blastIdx(wildcards):
+	if (wildcards.RUN == "B73vB73"):
+		idx = config["db"]["b73"]["genome"]
+	elif (wildcards.RUN == "PH207vPH207"):
+		idx = config["db"]["ph207"]["genome"]
+	elif (wildcards.RUN == "B73vPH207"):
+		idx = config["db"]["ph207"]["genome"]
+	elif (wildcards.RUN == "PH207vB73"):
+		idx = config["db"]["b73"]["genome"]
+	return(idx)
+def get_blast_input(wildcards):
+	if (wildcards.RUN == "B73vB73"):
+		myin = SCRATCH+"/B73vB73_blsn-target-file.txt"
+	elif (wildcards.RUN == "PH207vPH207"):
+		myin = SCRATCH+"/PH207vPH207_blsn-target-file.txt"
+	elif (wildcards.RUN == "B73vPH207"):
+		myin = SCRATCH+"/B73vPH207_blsn-target-file.txt"
+	elif (wildcards.RUN == "PH207vB73"):
+		myin = SCRATCH+"/B73vPH207_blsn-target-file.txt"
+	return(myin)
+
+# This defines all the output files to be generated in each step.
+rule all:
+	input:
+		expand('{dir}/{RUN}_blsnOutput.txt', RUN=SAMPLES,dir=SCRATCH),
+		expand('{dir}/{RUN}_blastn-parsed-scored.txt', RUN=SAMPLES,dir=SCRATCH),
+		expand('{dir}/blastNA_targets.txt', dir=SCRATCH,geno=GENOS),
+		expand('{dir}/{RUN}_blastNA_output.txt',dir=SCRATCH,RUN=SAMPLES),
+		expand('{dir}/{RUN}_blastNA_output-scored.txt',dir=SCRATCH,RUN=SAMPLES)
+
+rule blsn:
+	input: get_blast_input
+	params:
+		fastaIndex = get_query,
+		blastIndex = get_blastIdx,
+		runType = "gene_region",
+		run = "{RUN}"
+	output: "{dir}/{RUN}_blsnOutput.txt"
+	run:
+		shell("perl {MUNGE}/genomewide-blast.pl -i {input} -o {output} -f {params.fastaIndex} -b {params.blastIndex} -c {params.runType} -r {params.run}")
+
+rule blastnScore:
+	input: rules.blsn.output
+	output: "{dir}/{RUN}_blastn-parsed-scored.txt"
+	params:
+		mode = "blsn",
+		run = "{RUN}",
+		phony = "phone.txt"
+	run:
+		shell("perl {MUNGE}/score_bl2seq_output.pl -i {input} -o {output[0]} -m {params.mode} -r {params.run} -t {params.phony}")
+
+rule getNAtargets:
+	input: INPUT
+	output: "{dir}/blastNA_targets.txt"
+	params:
+		query = GENOS[0],
+		subj = GENOS[1]
+	run:
+		shell("perl {MUNGE}/get_NA_realignments.pl --input {input} --query {params.query} --subj {params.subj} --out {output}")
+
+rule blastNA:
+	input: rules.getNAtargets.output
+	params:
+		fastaIndex = get_query,
+		blastIndex = get_blastIdx,
+		runType = "chr_region",
+		run = "{RUN}"
+	output: "{dir}/{RUN}_blastNA_output.txt"
+	run:
+		shell("perl {MUNGE}/genomewide-blast.pl -i {input} -o {output} -f {params.fastaIndex} -b {params.blastIndex} -c {params.runType} -r {params.run}")
+
+rule scoreNA:
+	input: rules.blastNA.output
+	params:
+		mode = "blsn",
+		run = "{RUN}",
+		phony = "phoney.txt"
+	output: "{dir}/{RUN}_blastNA_output-scored.txt",
+	run:
+		shell("perl {MUNGE}/score_bl2seq_output.pl -i {input} -o {output} -m {params.mode} -r {params.run} -t {params.phony}")
+
+#qsub -X -I -l nodes=1:ppn=15 -l walltime=5:00
+#snakemake -p -s test.snakemake --configfile config.yml --cluster-config cluster.yaml --cluster "qsub -l {cluster.l} -m {cluster.m} -N {cluster.N} -r {cluster.r} -V" --jobs 2 -F

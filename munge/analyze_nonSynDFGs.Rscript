@@ -1,0 +1,167 @@
+#!/usr/bin/Rscript
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+##ABOUT: MODIFY THIS FILE TO GET SUPPLEMENT TABLE (DELETE OTHER FILE DEALING WITH CONTROLS)
+
+setwd('/home/hirschc1/shared/projects/fractionation/data/sqlite')
+con = dbConnect(SQLite(), dbname="all_info.db")
+
+## GET DIFFERENTIALLY FRACTIONATED GENES ##
+myQuery <- dbSendQuery(con,
+	"SELECT a.*,b.aa_cov,b.ab_cov,c.chr,c.start,c.stop
+	FROM assignments a
+	JOIN reseq_cov b ON a.gene=b.gene
+	JOIN gff c on a.gene=c.gene
+	")
+fracQC <- dbFetch(myQuery, n = -1)
+dbClearResult(myQuery)
+
+# Get total counts of DFGs
+trueDFGs <- fracQC %>% mutate( df = case_when(
+	cognate == "NA" ~ "1",
+	cognate != "NA" ~ "0"
+)) %>%
+filter(df == 1,ab_cov<=0.20)
+
+trueDFGs %>%
+	group_by(genotype,subgenome) %>%
+	tally()
+
+# These are the numbers of true losses
+# 	genotype subgenome     n
+# 1      B73    maize1    29
+# 2      B73    maize2    38
+# 3    PH207    maize1    18
+# 4    PH207    maize2    20
+
+# Export lists of true dfgs
+trueDFGs %>%
+	filter(genotype == "PH207") %>%
+	select(chr,start,stop,gene) %>% write.table(file="/home/hirschc1/shared/projects/fractionation/data/ph207-true-dfgs.txt", sep="\t", row.names=F,quote=F)
+
+trueDFGs %>%
+	filter(genotype == "B73") %>%
+	select(chr,start,stop,gene) %>% write.table(file="/home/hirschc1/shared/projects/fractionation/data/b73-true-dfgs.txt", sep="\t", row.names=F,quote=F)
+
+# Get false differentially fractionated genes
+falseDFGs <- fracQC %>% mutate( df = case_when(
+	cognate == "NA" ~ "1",
+	cognate != "NA" ~ "0"
+)) %>%
+filter(df == 1,ab_cov>0.20)
+
+# Export these to conduct analysis for non-allelic homologs
+falseDFGs %>%
+	filter(genotype == "PH207") %>%
+	select(chr,start,stop,gene) %>% write.table(file="/home/hirschc1/shared/projects/fractionation/data/ph207-false-dfgs.txt", sep="\t", row.names=F,quote=F)
+
+falseDFGs %>%
+	filter(genotype == "B73") %>%
+	select(chr,start,stop,gene) %>% write.table(file="/home/hirschc1/shared/projects/fractionation/data/b73-false-dfgs.txt", sep="\t", row.names=F,quote=F)
+
+####################################################################################
+# After completing the bt2-realign-tracking snakemake file return to this analysis #
+####################################################################################
+
+#############################################
+## GET DFGs THAT HAVE A NON-SYNTENIC MATCH ##
+#############################################
+
+myQuery <- dbSendQuery(con,
+	"SELECT a.*,b.homolog,b.cov,c.chr,c.start,c.stop,c.chrorder
+	FROM assignments a
+  JOIN nah b ON a.gene=b.gene
+	JOIN gff c ON a.gene=c.gene
+	")
+nah <- dbFetch(myQuery, n = -1)
+dbClearResult(myQuery)
+
+nah %>%
+	filter(homolog!= reciprocal) %>%
+	select(gene,homolog,cov) %>%
+	write.table(file="/home/hirschc1/shared/projects/fractionation/data/b73-ph207-regions-mappedBack-sorted-merged-overlap-hits-wcov20-uniq-homeologs-filtered.txt", sep="\t", row.names=F,quote=F)
+
+# Often the non-allelic homeolog is actually one of the syntenic genes that has already been identified
+nah %>%
+	filter(homolog!= reciprocal) %>%
+	group_by(subgenome,genotype) %>%
+	tally()
+
+# 	subgenome genotype     n
+#       <chr>    <chr> <int>
+# 1    maize1      B73    29
+# 2    maize1    PH207    10
+# 3    maize2      B73    27
+# 4    maize2    PH207     5
+
+# We want to make sure not to consider these genes going forward
+nah %>%
+	filter(homolog== reciprocal) %>%
+	group_by(subgenome,genotype) %>%
+	tally()
+#	subgenome genotype     n
+#1    maize1      B73     4
+#2    maize1    PH207     2
+#3    maize2      B73     1
+#4    maize2    PH207     7
+
+#########################################################################
+## HOW MANY TIMES DOES A DFG MATCH A NONSYNTENIC GENE ON THE WRONG CHR ##
+#########################################################################
+
+myQuery <- dbSendQuery(con,
+        "SELECT a.gene,a.chr
+        FROM gff a")
+gffLite <- dbFetch(myQuery, n = -1)
+dbClearResult(myQuery)
+
+gff <- dbReadTable(con, "gff")
+
+
+matchQC <- inner_join(nah, gff, by= c("homolog"= "gene")) %>%
+	select(-exon_count, -len) %>%
+	filter(homolog!=reciprocal, chr.x!=chr.y) %>%
+	arrange(gene) %>%
+	group_by(genotype,subgenome)
+
+matchQC %>%
+	tally()
+
+# These are non-allelic homologs that are on an unexpected chromosome
+genotype subgenome     n
+# 		<chr>     <chr> <int>
+# 1      B73    maize1    25
+# 2      B73    maize2    23
+# 3    PH207    maize1     3
+
+matchQC %>%
+			write.table(file="/home/hirschc1/shared/projects/fractionation/data/non-allelic-homolog_hits_unexpected-chr_supplemental.txt", sep="\t", row.names=F,quote=F)
+
+# These are non-allelic homologs that are on the expected chromosome but outside the syntenic block
+matchQC <- inner_join(nah, gff, by= c("homolog"= "gene")) %>%
+	rowwise() %>%
+	filter(homolog!=reciprocal, chr.x==chr.y, abs(as.numeric(chrorder.x) - as.numeric(chrorder.y)) > 15 ) %>%
+	select(-len,-exon_count,-cov) %>%
+	arrange(gene) %>%
+	group_by(genotype,subgenome)
+
+inner_join(nah, gff, by= c("homolog"= "gene")) %>%
+	rowwise() %>%
+	filter(homolog!=reciprocal, chr.x==chr.y) %>%
+	mutate(diff=abs(as.numeric(chrorder.x) - as.numeric(chrorder.y) > 15)) %>%
+	select(gene,homolog,chrorder.x,chrorder.y,diff)
+
+matchQC %>%
+	tally()
+# genotype subgenome     n
+# 1      B73    maize1     3
+# 2      B73    maize2     3
+# 3    PH207    maize1     5
+# 4    PH207    maize2     4
+
+matchQC %>%
+	select(gene,homolog)
+
+matchQC %>%
+			write.table(file="/home/hirschc1/shared/projects/fractionation/data/non-allelic-homolog_hits_expected-chr_supplemental.txt", sep="\t", row.names=F,quote=F)

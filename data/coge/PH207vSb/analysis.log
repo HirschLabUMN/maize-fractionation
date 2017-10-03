@@ -1,0 +1,171 @@
+Added fasta file generation for:
+  Sorghum bicolor (sorghum)
+
+Added fasta file generation for:
+  Zea mays (maize; corn)
+
+Added LastDB generation
+/scratch/coge/cache/last/db/35024/35024-CDS
+
+Added genome comparison (algorithm: Last)
+
+Added BED files creation
+
+Added Filtering results of tandem duplicates (tandem duplication distance: 15, c-score: 0.1)
+
+Added convertion of blast file to dagchainer input file
+
+Added convertion of dagchainer input into gene order coordinates
+
+WARNING: sub run_adjust_dagchainer_evals failed. Perhaps due to Out of Memory error. Proceeding without this step!
+
+Added DagChainer (merge: disabled)
+
+Added Merge Syntenic Blocks (Maximum distance between two blocks: 0 genes)
+
+Added Syntenic Depth (ratio: 1/2, overlap: 40)
+Sorghum bicolor (sorghum) -vs- Zea mays (maize; corn)
+
+Added conversion gene order coordinates back to genomic coordinates
+
+Added generation of svg dotplot
+
+Final Post Processing
+
+Added Processing of Tandem Duplicate Files
+
+Added GEvo links generation
+#########################
+
+#########################
+Generating fasta file
+Job: nice /opt/apache2/coge/scripts/synmap/generate_fasta.pl  --config /opt/apache2/coge/coge.conf --genome_id 35020 --feature_type CDS --fasta 35020-CDS.fasta
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Generating fasta file
+Job: nice /opt/apache2/coge/scripts/synmap/generate_fasta.pl  --config /opt/apache2/coge/coge.conf --genome_id 35024 --feature_type CDS --fasta 35024-CDS.fasta
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Generating LastDB
+Job: mkdir -p /scratch/coge/cache/last/db/35024 && nice lastdb    /scratch/coge/cache/last/db/35024/35024-CDS  35024-CDS.fasta
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Running genome comparison
+Job: mkdir -p /opt/apache2/coge/web/data/diags/35020/35024;nice lastal -u 0 -P 44 -i3G -f BlastTab /scratch/coge/cache/last/db/35024/35024-CDS /opt/apache2/coge/web/data/fasta//35020-CDS.fasta > /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last  ;touch /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.done
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Creating BED files
+Job: nice /opt/apache2/coge/scripts/synmap/blast2bed.pl  -infile 35020_35024.CDS-CDS.last -outfile1 35020_35024.CDS-CDS.last.q.bed -outfile2 35020_35024.CDS-CDS.last.s.bed
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Filtering tandem dups
+Job: nice /opt/apache2/coge/bin/quota-alignment/scripts/blast_to_raw.py   35020_35024.CDS-CDS.last --localdups  --qbed 35020_35024.CDS-CDS.last.q.bed --sbed 35020_35024.CDS-CDS.last.s.bed --tandem_Nmax 15 --cscore 0.1 > 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Formatting for DAGChainer
+Job: nice /opt/apache2/coge/scripts/synmap/dag_tools.py  -q a35020 -s b35024 -b 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered -c  > 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Converting to genomic order
+Job: nice /opt/apache2/coge/scripts/synmap/gene_order.py   35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all  35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go --gid1 35020 --gid2 35024 --feature1 CDS --feature2 CDS
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Running DAGChainer
+Job: nice python /opt/apache2/coge/bin/dagchainer_bp/dag_chainer.py  -E 0.05 -i 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go -D 20 -g 10 -A 5 > 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Merging Syntenic Blocks
+Job: nice /opt/apache2/coge/scripts/synmap/quota_align_merge.pl  --config /opt/apache2/coge/coge.conf --infile 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords --outfile 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1 --max_distance 0
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Processing Subject Tandem Duplicate File
+Job: nice /opt/apache2/coge/scripts/synmap/process_dups.pl  --config /opt/apache2/coge/coge.conf --infile 35020_35024.CDS-CDS.last.s.localdups --outfile 35020_35024.CDS-CDS.last.s.tandems
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Processing Query Tandem Duplicate File
+Job: nice /opt/apache2/coge/scripts/synmap/process_dups.pl  --config /opt/apache2/coge/coge.conf --infile 35020_35024.CDS-CDS.last.q.localdups --outfile 35020_35024.CDS-CDS.last.q.tandems
+Skipped: The analysis was previously generated.
+#########################
+
+#########################
+Calculating Syntenic depth
+Job: nice /opt/apache2/coge/scripts/synmap/quota_align_coverage.pl  --config /opt/apache2/coge/coge.conf --infile 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1 --outfile 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40 --depth_ratio_org1 1 --depth_ratio_org2 2 --depth_overlap 40
+Submitted at: 15/04/17 at 11:15:29PM
+Completed at: 15/04/17 at 11:15:31PM
+Execution time: 1.528399 sec
+Assigned to task: 63750
+Return status: 0
+Expected outputs: /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40
+Command Output:
+"Convert command: /opt/apache2/coge/bin/quota-alignment/cluster_utils.py --format=dag --log_evalue 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qa\nQuota Align command: /opt/apache2/coge/bin/quota-alignment/quota_align.py --Nm=40 --quota=1:2 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qa > 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.tmp\nConverting dag output to quota_align format.\nread (873) clusters in '35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1'\nwrite (873) clusters to '35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qa'\nRunning quota_align to find syntenic coverage.\nread (873) clusters in '35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qa'\nnumber of variables (873), number of constraints (1083)\nwrite MIP instance to '/work_queue/workers/worker-33-61244/t.63750/work/data.lp'\noptimized objective value (1024390)\nwrite (389) clusters to '<stdout>'\n\nGenerating input data for GRIMM\nConverting dag output to quota_align format: /opt/apache2/coge/bin/quota-alignment/cluster_utils.py --format=dag --log_evalue 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.qa\nread (389) clusters in '35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40'\nwrite (389) clusters to '35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.qa'\nrunning  cluster_utils to generating grimm input:\n\t/opt/apache2/coge/bin/quota-alignment/cluster_utils.py --print_grimm 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.qa\nread (389) clusters in '35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.qa'\na35020_1,a35020_10,a35020_2,a35020_3,a35020_4,a35020_5,a35020_6,a35020_7,a35020_8,a35020_9\nb35024_1,b35024_10,b35024_2,b35024_3,b35024_4,b35024_5,b35024_6,b35024_7,b35024_8,b35024_9,b35024_scaffold53736\n"#########################
+
+#########################
+Converting to genomic coordinates
+Job: nice /opt/apache2/coge/scripts/synmap/gene_order.py   35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40  35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords --positional 
+Submitted at: 15/04/17 at 11:15:31PM
+Completed at: 15/04/17 at 11:15:32PM
+Execution time: 0.22705 sec
+Assigned to task: 63751
+Return status: 0
+Expected outputs: /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords
+Command Output:
+''#########################
+
+#########################
+Generating svg image
+Job: nice /opt/apache2/coge/scripts/synmap/dotplot.py  --dag_file 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords --xhead "Sorghum bicolor (sorghum)" --yhead "Zea mays (maize; corn)" --output 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords --no-ks 
+Submitted at: 15/04/17 at 11:15:32PM
+Completed at: 15/04/17 at 11:15:34PM
+Execution time: 0.803367 sec
+Assigned to task: 63752
+Return status: 0
+Expected outputs: /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords.svg
+Command Output:
+''#########################
+
+#########################
+Generating GEvo links to condensed file
+Job: nice /opt/apache2/coge/scripts/synmap/gevo_links.pl  --config /opt/apache2/coge/coge.conf --infile /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords --dsgid1 35020 --dsgid2 35024 --outfile 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords.gevolinks
+Submitted at: 15/04/17 at 11:15:32PM
+Completed at: 15/04/17 at 11:15:35PM
+Execution time: 1.196266 sec
+Assigned to task: 63753
+Return status: 0
+Expected outputs: /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords.gevolinks, /opt/apache2/coge/web/data/diags/35020/35024/35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords.gevolinks.condensed
+Command Output:
+'[Sat Apr 15 23:15:34 2017] gevo_links.pl: Use of uninitialized value $dsgid1 in concatenation (.) or string at /opt/apache2/coge/scripts/synmap/gevo_links.pl line 152.\n[Sat Apr 15 23:15:34 2017] gevo_links.pl: Use of uninitialized value $names[0] in join or string at /opt/apache2/coge/scripts/synmap/gevo_links.pl line 176.\n'#########################
+
+#########################
+Generating images
+Job: nice /opt/apache2/coge/bin/dotplot.pl -cf /opt/apache2/coge/coge.conf -tmpl /opt/apache2/coge/tmpl/widgets  -a 35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords -b master_35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords_ct0.w1000.sr.cs1.csoS.log.nsd -l 'javascript:synteny_zoom("35020","35024","35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords","XCHR","YCHR")' -dsg1 35020 -dsg2 35024 -w 1000 -lt 2 -am nt -sr 1 -color_scheme 1 -chr_sort_order S
+Submitted at: 15/04/17 at 11:15:34PM
+Completed at: 15/04/17 at 11:16:00PM
+Execution time: 24.010437 sec
+Assigned to task: 63754
+Return status: 0
+Expected outputs: /opt/apache2/coge/web/data/diags/35020/35024/html/master_35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords_ct0.w1000.sr.cs1.csoS.log.nsd.html, /opt/apache2/coge/web/data/diags/35020/35024/html/master_35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords_ct0.w1000.sr.cs1.csoS.log.nsd.png, /opt/apache2/coge/web/data/diags/35020/35024/html/master_35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords_ct0.w1000.sr.cs1.csoS.log.nsd.x.png, /opt/apache2/coge/web/data/diags/35020/35024/html/master_35020_35024.CDS-CDS.last.tdd15.cs0.1.filtered.dag.all.go_D20_g10_A5.aligncoords.Dm0.ma1.qac1.2.40.gcoords_ct0.w1000.sr.cs1.csoS.log.nsd.y.png
+Command Output:
+''#########################
+

@@ -1,0 +1,395 @@
+#!/usr/bin/Rscript
+library(tidyverse)
+library(magrittr)
+library(stringr)
+library(DBI)
+library(RSQLite)
+setwd("/home/hirschc1/shared/projects/fractionation/cache/pav-frequency")
+con = dbConnect(SQLite(), dbname="/home/hirschc1/shared/projects/fractionation/data/sqlite/all_info.db") # Set-up connection to SQLite database
+load(".RData")
+
+# LOAD DATASETS
+pav_b <- read.delim(file="/home/hirschc1/shared/projects/fractionation/cache/pav-frequency/pav-v-b73-matrix.txt", header=T, row.names=1) # B73 pav matrix
+pav_p <- read.delim(file="/home/hirschc1/shared/projects/fractionation/cache/pav-frequency/pav-v-ph207-matrix.txt", header=T, row.names=1)# PH207 pav matrix
+pedigree <- read.delim(file="/home/hirschc1/shared/projects/fractionation/cache/pav-frequency/pedigree.txt", header=F) # Pedigree Information
+colnames(pedigree) <- c("Line", "Source")
+tandems <- read.delim(file="/home/hirschc1/shared/projects/fractionation/data/tandem_assignments/tandem-syntenic-genes.txt", header=F) # List of genes that are tandem duplicates of syntenic genes
+tandems %<>% rename("representative"=V1, "tandem"=V2)
+dfgs <- read.delim(file="/home/hirschc1/shared/projects/fractionation/cache/pav-frequency/dfgs.txt",header=F) # List of Differentially fractionated genes
+colnames(dfgs) <- c("Gene")
+
+assignMeta <- dbReadTable(con, "assignments") # Read-in assignments
+gff <- dbReadTable(con, "gff")
+gff %<>%
+	mutate( genotype = case_when(
+		grepl("Zm00001d",gene) == TRUE ~ "b73",
+		grepl("Zm00008a",gene) == TRUE ~ "ph207"
+		)) %>%
+	filter(chr==1 | chr==2 | chr==3 | chr==4 | chr==5 | chr==6 | chr==7 | chr==8 | chr==9 | chr == 10)
+
+# Replace headers in pav matrices
+pav_b %<>%
+  rename_all(
+      funs(
+        stringr::str_replace_all(., '_B73v4_Merged_unique_cds.cov.summary.txt', '') # string, pattern, replacement
+      )
+  )
+pav_b %<>%
+	rownames_to_column(var = "Gene") %>%
+	rowwise() %>%
+	filter(B73 > 0.20) %>%
+	select(-B73,-PH207)
+
+pav_p %<>%
+  rename_all(
+      funs(
+        stringr::str_replace_all(., '_PH207v1_Merged_unique_cds.cov.summary.txt', '') # string, pattern, replacement
+      )
+  )
+pav_p %<>%
+	rownames_to_column(var = "Gene") %>%
+	rowwise() %>%
+	filter(PH207 > 0.20) %>%
+	select(-B73,-PH207)
+
+##############################
+### PAV FREQUENCY SPECTRUM ###
+##############################
+
+# Number of genes in each sample below 0.20 percent:
+pav_b %>%
+	gather(genotype, coverage) %>%
+	group_by(genotype) %>%
+	filter(coverage < 0.20, ) %>% tally()
+
+pav_p %>%
+	gather(genotype, coverage) %>%
+	group_by(genotype) %>%
+	filter(coverage < 0.20) %>% tally()
+
+# List all genes and get how often they are PAV
+pav_b.list <- pav_b %>%
+	gather(genotype, coverage, -Gene) %>%
+	group_by(Gene) %>%
+	summarise(pav_freq = round(sum(coverage < 0.20)/n(),2) )
+
+pav_b.list_DFGs <- semi_join(pav_b.list,dfgs, by="Gene") %>% mutate(DFG=1) #153
+pav_b.list_nonDFGs <- anti_join(pav_b.list,dfgs, by="Gene") %>% mutate(DFG=0) # 38852
+
+pav_p.list <- pav_p %>%
+	gather(genotype, coverage, -Gene) %>%
+	group_by(Gene) %>%
+	summarise(pav_freq = round(sum(coverage < 0.20)/n(),2) )
+
+pav_p.list_DFGs <- semi_join(pav_p.list,dfgs, by="Gene") %>% mutate(DFG=1) # 74
+pav_p.list_nonDFGs <- anti_join(pav_p.list,dfgs, by="Gene") %>% mutate(DFG=0) # 38865
+
+tandems_wMeta <- inner_join(tandems,assignMeta, by=c("representative"="gene")) %>%
+	select(-representative) %>%
+	rename("gene"="tandem")
+
+assignMeta %<>%
+	rbind(tandems_wMeta,assignMeta)
+
+# Add category to determine which genes are syntenic
+pav_b.syn_DFG <- inner_join(pav_b.list_DFGs,assignMeta, by=c("Gene"="gene")) %>%
+	group_by(Gene) %>%
+	filter(row_number()==1) %>%   # Zm00001d023523
+	ungroup() %>%
+	select(Gene,pav_freq,DFG,subgenome) %>%
+	arrange(desc(pav_freq)) %>%
+	mutate(Gene=factor(Gene,Gene),synteny="Syntenic",genotype="B73")
+
+pav_b.syn_nonDFG <- inner_join(pav_b.list_nonDFGs,assignMeta, by=c("Gene"="gene")) %>%
+	group_by(Gene) %>%
+	filter(row_number()==1) %>%   # Zm00001d023523
+	ungroup() %>%
+	select(Gene,pav_freq,DFG,subgenome) %>%
+	arrange(desc(pav_freq)) %>%
+	mutate(Gene=factor(Gene,Gene),synteny="Syntenic",genotype="B73")
+
+pav_p.syn_DFG <- inner_join(pav_p.list_DFGs,assignMeta, by=c("Gene"="gene")) %>%
+	group_by(Gene) %>%
+	filter(row_number()==1) %>%   # Zm00001d023523
+	ungroup() %>%
+	select(Gene,pav_freq,DFG,subgenome) %>%
+	arrange(desc(pav_freq)) %>%
+	mutate(Gene=factor(Gene,Gene),synteny="Syntenic",genotype="PH207")
+
+pav_p.syn_nonDFG <- inner_join(pav_p.list_nonDFGs,assignMeta, by=c("Gene"="gene")) %>%
+	group_by(Gene) %>%
+	filter(row_number()==1) %>%   # Zm00001d023523
+	ungroup() %>%
+	select(Gene,pav_freq,DFG,subgenome) %>%
+	arrange(desc(pav_freq)) %>%
+	mutate(Gene=factor(Gene,Gene),synteny="Syntenic",genotype="PH207")
+
+# Now an anti-join to get the genes that aren't syntneic
+pav_b.nonsyn <- anti_join(pav_b.list,assignMeta, by=c("Gene"="gene")) %>%
+	select(Gene,pav_freq) %>%
+	arrange(desc(pav_freq)) %>%
+	mutate(Gene=factor(Gene,Gene), synteny="Non-syntenic", genotype="B73", DFG=0, subgenome="NA")
+
+pav_p.nonsyn <- anti_join(pav_p.list,assignMeta, by=c("Gene"="gene")) %>%
+	select(Gene,pav_freq) %>%
+	arrange(desc(pav_freq)) %>%
+	mutate(Gene=factor(Gene,Gene), synteny="Non-syntenic", genotype="PH207", DFG=0, subgenome="NA")
+
+bp_summ <- rbind(pav_b.nonsyn,pav_p.nonsyn,pav_b.syn_DFG,pav_b.syn_nonDFG,pav_p.syn_DFG,pav_p.syn_nonDFG)
+
+# How often are genes PAV across samples?
+bp_summ %>%
+	group_by(genotype,synteny,DFG) %>%
+	summarise(sum(pav_freq > 0)/n())
+# 	genotype      synteny   DFG `sum(pav_freq > 0)/n()`
+# 1      B73 Non-syntenic     0               0.6246232
+# 2      B73     Syntenic     0               0.1005596
+# 3      B73     Syntenic     1               0.4391892
+# 4    PH207 Non-syntenic     0               0.5824008
+# 5    PH207     Syntenic     0               0.1123485
+# 6    PH207     Syntenic     1               0.6891892
+
+ELSE <- TRUE
+
+propPlot <- bp_summ %>%
+	mutate(category=case_when(
+		synteny=="Syntenic" & DFG==1 ~ "Syntenic/DFG",
+		synteny=="Syntenic" & DFG==0 ~ "Syntenic/non-DFG",
+		ELSE ~ "Non-syntenic")) %>%
+	group_by(category,genotype) %>%
+	summarise(pav = sum(pav_freq > 0)/n(), non_pav=sum(pav_freq <= 0)/n()) %>%
+	gather(pav_status, proportion, -category, -genotype) %>%
+	mutate(pav_status=factor(pav_status, levels=c("pav","non_pav")))
+
+propPlot %>%
+	ggplot(aes(category, proportion, fill=pav_status)) +
+		geom_bar(position="stack", stat="identity",color="black") +
+		coord_flip() +
+		facet_wrap(~ genotype) +
+		theme_classic() +
+		scale_fill_manual(values=c("lightgrey", "white")) +
+		theme(text = element_text(size=18)) +
+		ggsave("pav-barplot.png",width=20,height=10,device="png")
+
+# Get cumulative distrbution for pav-frequency
+pav_b_DFG.vec <- cume_dist(as.vector(pav_b.syn_DFG$pav_freq)) %>% as_tibble() %>% rename(cumDist=value)
+pav_b_nonDFG.vec <- cume_dist(as.vector(pav_b.syn_nonDFG$pav_freq)) %>% as_tibble() %>% rename(cumDist=value)
+pav_p_DFG.vec <- cume_dist(as.vector(pav_p.syn_DFG$pav_freq)) %>% as_tibble() %>% rename(cumDist=value)
+pav_p_nonDFG.vec <- cume_dist(as.vector(pav_p.syn_nonDFG$pav_freq)) %>% as_tibble() %>% rename(cumDist=value)
+pav_b.vec <- cume_dist(as.vector(pav_b.nonsyn$pav_freq)) %>% as_tibble() %>% rename(cumDist=value)
+pav_p.vec <- cume_dist(as.vector(pav_p.nonsyn$pav_freq)) %>% as_tibble() %>% rename(cumDist=value)
+
+# Add cumulative distrbution as a new column
+pav_b.syn_DFG %<>% bind_cols(pav_b_DFG.vec)
+pav_b.syn_nonDFG %<>% bind_cols(pav_b_nonDFG.vec)
+pav_p.syn_DFG %<>% bind_cols(pav_p_DFG.vec)
+pav_p.syn_nonDFG %<>% bind_cols(pav_p_nonDFG.vec)
+pav_b.nonsyn %<>% bind_cols(pav_b.vec)
+pav_p.nonsyn %<>% bind_cols(pav_p.vec)
+
+# Filter redundant values before plotting
+pav_b.syn_DFG_plot <- pav_b.syn_DFG %>% arrange(pav_freq) %>% group_by(pav_freq,cumDist) %>% filter(row_number()==1) %>% select(pav_freq,synteny,genotype,cumDist,DFG)
+pav_b.syn_nonDFG_plot <- pav_b.syn_nonDFG %>% arrange(pav_freq) %>% group_by(pav_freq,cumDist) %>% filter(row_number()==1) %>% select(pav_freq,synteny,genotype,cumDist,DFG)
+pav_p.syn_DFG_plot <- pav_p.syn_DFG %>% arrange(pav_freq) %>% group_by(pav_freq,cumDist) %>% filter(row_number()==1) %>% select(pav_freq,synteny,genotype,cumDist,DFG)
+pav_p.syn_nonDFG_plot <- pav_p.syn_nonDFG %>% arrange(pav_freq) %>% group_by(pav_freq,cumDist) %>% filter(row_number()==1) %>% select(pav_freq,synteny,genotype,cumDist,DFG)
+pav_b.nonsyn_plot <- pav_b.nonsyn %>% arrange(pav_freq) %>% group_by(pav_freq,cumDist) %>% filter(row_number()==1) %>% select(pav_freq,synteny,genotype,cumDist,DFG)
+pav_p.nonsyn_plot <- pav_p.nonsyn %>% arrange(pav_freq) %>% group_by(pav_freq,cumDist) %>% filter(row_number()==1) %>% select(pav_freq,synteny,genotype,cumDist,DFG)
+
+# Combine together into a single dataframe for plotting
+pav_plot <- rbind(pav_b.syn_DFG_plot, pav_b.syn_nonDFG_plot, pav_b.nonsyn_plot, pav_p.syn_DFG_plot, pav_p.syn_nonDFG_plot, pav_p.nonsyn_plot)
+
+# Add some categorical information
+ELSE <- TRUE
+pav_plot %<>% mutate(category=case_when(
+											synteny=="Syntenic" & DFG==1 ~ "Syntenic/DFG",
+											synteny=="Syntenic" & DFG==0 ~ "Syntenic/non-DFG",
+											ELSE ~ "Non-syntenic"))
+
+
+pav_plot %>%
+	ggplot(aes(pav_freq,cumDist,colour=category,linetype=genotype)) +
+	geom_line(size=1.5) +
+	theme_minimal() +
+	scale_colour_manual(values=c("black", "grey", "dodgerblue")) +
+	theme(text = element_text(size=18)) +
+	labs(x="PAV Frequency",y="Cumulative Distribution") +
+	ggsave("pav-frequency-distribution.png",width=10,height=10)
+
+###################
+## SUMMARY STATS ##
+###################
+
+bp_summ %>%
+	group_by(synteny,DFG,genotype) %>%
+	filter(pav_freq > 0) %>%
+	summarise(mean_pav_freq= mean(pav_freq))
+
+# Of dispensable genes, on average non-syntenic genes are absent in 17.2% of lines
+# comparsed to 9.2% of syntenic lines.
+# 	synteny mean_pav_freq
+# synteny genotype mean_pav_freq
+# 1 Non-syntenic      B73    0.17655100
+# 2 Non-syntenic    PH207    0.16733023
+# 3     Syntenic      B73    0.09095201
+# 4     Syntenic    PH207    0.09255814
+
+bp_summ %>%
+	group_by(synteny,DFG,genotype) %>%
+	summarise(mean_pav_freq= mean(pav_freq))
+# 	synteny   DFG genotype mean_pav_freq
+# 1 Non-syntenic     0      B73   0.110277846
+# 2 Non-syntenic     0    PH207   0.097453256
+# 3     Syntenic     0      B73   0.008798358
+# 4     Syntenic     0    PH207   0.009918523
+# 5     Syntenic     1      B73   0.098310811
+# 6     Syntenic     1    PH207   0.222297297
+#On average, differentially fractionated syntenic genes were absent across 16.28% of the inbreds compared to less than 1% for non-differentially fractionated syntenic genes.
+
+bp_summ %>%
+	group_by(synteny,DFG,genotype) %>%
+	summarise(mean=mean(pav_freq), prop=sum(pav_freq>0.10)/n(), n=n())
+# Groups:   synteny, DFG [?]
+#        synteny   DFG genotype        mean       prop     n
+# 1 Non-syntenic     0      B73 0.110277846 0.33317037 12273
+# 2 Non-syntenic     0    PH207 0.097453256 0.28914993 14387
+# 3     Syntenic     0      B73 0.008798358 0.02556258 24841
+# 4     Syntenic     0    PH207 0.009918523 0.02649034 24424
+# 5     Syntenic     1      B73 0.098310811 0.27702703   148
+# 6     Syntenic     1    PH207 0.222297297 0.55405405    74
+
+# Get summary of all genes that are variable
+bp_summ %>%
+	filter(pav_freq > 0) %>%
+	group_by(synteny,DFG,genotype) %>%
+	summarise(mean=mean(pav_freq),prop=sum(pav_freq>0.10)/n(), n=n())
+# 	synteny   DFG genotype       mean      prop     n
+# 1 Non-syntenic     0      B73 0.17655100 0.5333942  7666
+# 2 Non-syntenic     0    PH207 0.16733023 0.4964793  8379
+# 3     Syntenic     0      B73 0.08749400 0.2542034  2498
+# 4     Syntenic     0    PH207 0.08828353 0.2357872  2744
+# 5     Syntenic     1      B73 0.22384615 0.6307692    65
+# 6     Syntenic     1    PH207 0.32254902 0.8039216    51
+
+bp_summ %>%
+	filter(pav_freq > 0.10) %>%
+	group_by(synteny,DFG,genotype) %>%
+	summarise(mean=mean(pav_freq))
+# 	synteny   DFG genotype      mean
+# 1 Non-syntenic     0      B73 0.2874150
+# 2 Non-syntenic     0    PH207 0.2877981
+# 3     Syntenic     0      B73 0.2333858
+# 4     Syntenic     0    PH207 0.2462133
+# 5     Syntenic     1      B73 0.3302439
+# 6     Syntenic     1    PH207 0.3878049
+#Many of these differentially fractionated genes were absent at high frequencies with those absent across at least 10% of the lines having a mean PAV frequency of 3675%.
+
+################################################################################
+#~                                SNP FREQUENCIES                             ~#
+################################################################################
+
+snp_b <- read.delim(file="/home/maize/shared/resources/snp-calls/b73-snp-counts-tally.txt", header=F)
+
+snp_b %<>% as.tibble() %>%
+	rename("gene"="V1", "chr"="V2", "start"="V3", "stop"="V4", "snpcount"="V5", "snpdensity"="V6", "frequencies"="V7") %>%
+	mutate(gene=as.character(gene),snpcount=as.numeric(snpcount),snpdensity=as.numeric(snpdensity),frequencies=as.vector(frequencies)) %>%
+	rowwise() %>%
+	mutate(meanFreq = mean(as.numeric(unlist(strsplit(as.character(frequencies), ",")))),
+				 rareFreq = sum(as.numeric(unlist(strsplit(as.character(frequencies), ","))) < 0.02)/(stop-start+1)) %>%
+	select(-frequencies,-chr,-start,-stop)
+
+nonsnp_b <- anti_join(gff,snp_b,by="gene") %>%
+	filter(genotype=="b73") %>%
+	select(gene) %>%
+	mutate(snpcount=0,snpdensity=0,meanFreq=0,rareFreq=0)
+
+# Combine both datasets together
+snp_b <- rbind(snp_b,nonsnp_b) # 39005
+
+# Now add on differential fractionation information
+snp_b_DFGs <- semi_join(snp_b,dfgs, by=c("gene"="Gene")) %>% mutate(DFG=1)
+snp_b_nonDFGs <- anti_join(snp_b,dfgs, by=c("gene"="Gene")) %>% mutate(DFG=0)
+snp_b <- rbind(snp_b_DFGs,snp_b_nonDFGs)
+
+# Now add on synteny information
+snp_b.syntenic <- inner_join(snp_b,assignMeta, by="gene") %>%
+	group_by(gene) %>%
+	filter(row_number()==1) %>%   # Zm00001d023523
+	ungroup() %>%
+	mutate(gene=factor(gene),synteny="Syntenic",genotype="B73") %>%
+	select(-duplicate,-cognate,-reciprocal)
+snp_b.nonsyntenic <- anti_join(snp_b,assignMeta, by="gene") %>%
+	group_by(gene) %>%
+	filter(row_number()==1) %>%   # Zm00001d023523
+	ungroup() %>%
+	mutate(gene=factor(gene),synteny="Non-syntenic",genotype="B73",subgenome="NA")
+
+snp_b <- rbind(snp_b.syntenic,snp_b.nonsyntenic)
+
+snp_b %>% group_by(subgenome,synteny,DFG) %>% summarise(nonsnpFreq=sum(snpcount==0)/n(),snpdensity=mean(snpdensity),meanFreq=mean(meanFreq),meanRare=mean(rareFreq))
+
+## KEY:
+# nonsnpFreq = Frequency of genes in each category that did not contain any SNPs
+# snpdensity = The proportion of the gene space with SNPs summarized for each category
+# meanFreq = The average allele frequency of SNPs for each category
+# meanRare = This is the same as the snpdensity but only taking into account rare SNPs
+# subgenome      synteny   DFG nonsnpFreq  snpdensity   meanFreq     meanRare
+# 1    maize1     Syntenic     0  0.4861978 0.006066961 0.11864460 0.0007844603
+# 2    maize1     Syntenic     1  0.5609756 0.003786437 0.07978622 0.0005317525
+# 3    maize2     Syntenic     0  0.5835682 0.004949138 0.09272685 0.0006529585
+# 4    maize2     Syntenic     1  0.6619718 0.003299278 0.08486282 0.0004269460
+# 5        NA Non-syntenic     0  0.6788523 0.001920343 0.05898922 0.0003703879
+
+# Apparently, snp diversity is inversely related to functional importance.
+snp_p <- read.delim(file="/home/maize/shared/resources/snp-calls/ph207-snp-counts-tally.txt", header=F)
+
+snp_p %<>% as.tibble() %>%
+	rename("gene"="V1", "chr"="V2", "start"="V3", "stop"="V4", "snpcount"="V5", "snpdensity"="V6", "frequencies"="V7") %>%
+	mutate(gene=as.character(gene),snpcount=as.numeric(snpcount),snpdensity=as.numeric(snpdensity),frequencies=as.vector(frequencies)) %>%
+	rowwise() %>%
+	mutate(meanFreq = mean(as.numeric(unlist(strsplit(as.character(frequencies), ",")))),
+				 rareFreq = sum(as.numeric(unlist(strsplit(as.character(frequencies), ","))) < 0.02)/(stop-start+1)) %>%
+	select(-frequencies,-chr,-start,-stop)
+
+nonsnp_p <- anti_join(gff,snp_b,by="gene") %>%
+	filter(genotype=="ph207") %>%
+	select(gene) %>%
+	mutate(snpcount=0,snpdensity=0,meanFreq=0,rareFreq=0)
+
+# Combine both datasets together
+snp_p <- rbind(snp_p,nonsnp_p) #39005
+
+# Now add on differential fractionation information
+snp_p_DFGs <- semi_join(snp_p,dfgs, by=c("gene"="Gene")) %>% mutate(DFG=1)
+snp_p_nonDFGs <- anti_join(snp_p,dfgs, by=c("gene"="Gene")) %>% mutate(DFG=0)
+snp_p <- rbind(snp_p_DFGs,snp_p_nonDFGs)
+
+# Now add on synteny information
+snp_p.syntenic <- inner_join(snp_p,assignMeta, by="gene") %>%
+	group_by(gene) %>%
+	filter(row_number()==1) %>%
+	ungroup() %>%
+	mutate(gene=factor(gene),synteny="Syntenic",genotype="PH207") %>%
+	select(-duplicate,-cognate,-reciprocal)
+snp_p.nonsyntenic <- anti_join(snp_p,assignMeta, by="gene") %>%
+	group_by(gene) %>%
+	filter(row_number()==1) %>%
+	ungroup() %>%
+	mutate(gene=factor(gene),synteny="Non-syntenic",genotype="PH207",subgenome="NA")
+
+snp_p <- rbind(snp_p.syntenic,snp_p.nonsyntenic)
+
+snp_p %>% group_by(subgenome,synteny,DFG) %>% summarise(nonsnpFreq=sum(snpcount==0)/n(),snpdensity=mean(snpdensity),meanFreq=mean(meanFreq),meanRare=mean(rareFreq))
+
+## KEY:
+# nonsnpFreq = Frequency of genes in each category that did not contain any SNPs
+# snpdensity = The proportion of the gene space with SNPs summarized for each category
+# meanFreq = The average allele frequency of SNPs for each category
+# meanRare = This is the same as the snpdensity but only taking into account rare SNPs
+# subgenome      synteny   DFG nonsnpFreq  snpdensity  meanFreq     meanRare
+# 1    maize1     Syntenic     0 0.03567632 0.009807107 0.2321110 0.0012779257
+# 2    maize1     Syntenic     1 0.38709677 0.003751188 0.2017865 0.0003228176
+# 3    maize2     Syntenic     0 0.04250559 0.009699050 0.2172563 0.0013385802
+# 4    maize2     Syntenic     1 0.39534884 0.003923329 0.1640229 0.0004246864
+# 5        NA Non-syntenic     0 0.21336476 0.004359303 0.1595480 0.0007991583
+
+# This same trend holds true in PH207

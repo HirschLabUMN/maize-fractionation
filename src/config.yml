@@ -1,0 +1,59 @@
+dir:
+  main: "/home/hirschc1/shared/projects/fractionation/"
+  scratch: "/scratch.global/broha006/projects/frac"
+  cache: "/home/hirschc1/shared/projects/fractionation/cache"
+  munge: "/home/hirschc1/shared/projects/fractionation/munge"
+  data: "/home/hirschc1/shared/projects/fractionation/data"
+job:
+  qsub: "-V -m a -d . -q small -r n -M broha006@umn.edu -l walltime=2:00:00 -l nodes=1:ppn=1 -l mem=2gb"
+coge:
+  designated: "/home/hirschc1/shared/projects/fractionation/cache/coge/Zm.vs.Sb_designated_wOsgenes.txt"
+  master: "/scratch.global/broha006/projects/frac/masterFile_no-duplicates.txt"
+db:
+  b73:
+    genome: /home/maize/shared/databases/blast/Zea_mays/B73/Zea_mays.AGPv4.dna.toplevel.fa
+    cds: /home/maize/shared/databases/blast/Zea_mays/B73/Zea_mays.AGPv4.cds.all.fa
+    storable: "/home/hirschc1/shared/projects/fractionation/config/b73_gff.storable"
+    bt2: /home/maize/shared/databases/bt2/Zea_mays/B73/Zea_mays.AGPv4.dna.toplevel
+    prot: /home/maize/shared/databases/blast/Zea_mays/B73/Zea_mays.AGPv4.pep.all.fa
+    blast: "/home/hirschc1/shared/projects/fractionation/data/assests/B73CdsFaIndex"
+  ph207:
+    genome: /home/maize/shared/databases/blast/Zea_mays/PH207/ZmaysPH207_443_v1.0.fa
+    cds: /home/maize/shared/databases/blast/Zea_mays/PH207/ZmaysPH207_443_v1.1.cds.fa
+    storable: /home/hirschc1/shared/projects/fractionation/config/ph207_gff.storable
+    bt2: /home/maize/shared/databases/bt2/Zea_mays/PH207/ZmaysPH207_443_v1.0
+    prot: /home/maize/shared/databases/blast/Zea_mays/PH207/ZmaysPH207_443_v1.1.protein.fa
+    blast: "/home/hirschc1/shared/projects/fractionation/data/assests/PH207CdsFaIndex"
+  sb:
+    genome: /home/maize/shared/databases/blast/Sorghum_bicolor/Sbicolor_313_v3.0.fa
+    cds: /home/maize/shared/databases/blast/Sorghum_bicolor/Sbicolor_313_v3.1.cds.fa
+    storable: "/home/hirschc1/shared/projects/fractionation/config/sb_gff.storable"
+  os:
+    genome: /home/maize/shared/databases/blast/Oryza_sativa/
+    cds: /home/maize/shared/databases/blast/Oryza_sativa/Osativa_323_v7.0.cds.fa
+    storable: "/home/hirschc1/shared/projects/fractionation/config/os_gff.storable"
+genome:
+  b73:
+    cds: "/home/maize/shared/databases/genomes/Zea_mays/B73/Zea_mays.AGPv4.cds.all.fa"
+    fasta: "/home/maize/shared/databases/genomes/Zea_mays/B73/Zea_mays.AGPv4.dna.toplevel.fa"
+    gff: "/home/maize/shared/databases/genomes/Zea_mays/B73/Zea_mays.AGPv4.33.gff3"
+    mrna: "/home/maize/shared/databases/genomes/Zea_mays/B73/Zea_mays.AGPv4.cdna.all.fa"
+    prot: "/home/maize/shared/databases/genomes/Zea_mays/B73/Zea_mays.AGPv4.pep.all.fa"
+  ph207:
+    cds: "/home/maize/shared/databases/genomes/Zea_mays/PH207/ZmaysPH207_443_v1.1.cds.fa"
+    fasta: "/home/maize/shared/databases/genomes/Zea_mays/PH207/ZmaysPH207_443_v1.0.fa"
+    gff: "/home/maize/shared/databases/genomes/Zea_mays/PH207/ZmaysPH207_443_v1.1.gene_exons.gff3"
+    mrna: "/home/maize/shared/databases/genomes/Zea_mays/PH207/ZmaysPH207_443_v1.1.transcript.fa"
+    prot: "/home/maize/shared/databases/genomes/Zea_mays/PH207/ZmaysPH207_443_v1.1.protein.fa"
+  os:
+    cds: "/home/maize/shared/databases/genomes/Oryza_sativa/Osativa_323_v7.0.cds.fa"
+    fasta: "/home/maize/shared/databases/genomes/Oryza_sativa/Osativa_323_v7.0.fa"
+    gff: "/home/maize/shared/databases/genomes/Oryza_sativa/Osativa_323_v7.0.gene_exons.gff3"
+    mrna: "/home/maize/shared/databases/genomes/Oryza_sativa/Osativa_323_v7.0.transcript.fa"
+    prot: "/home/maize/shared/databases/genomes/Oryza_sativa/Osativa_323_v7.0.protein.fa"
+  sb:
+    cds: "/home/maize/shared/databases/genomes/Sorghum_bicolor/Sbicolor_313_v3.1.cds.fa"
+    fasta: "/home/maize/shared/databases/genomes/Sorghum_bicolor/Sbicolor_313_v3.0.fa"
+    gff: "/home/maize/shared/databases/genomes/Sorghum_bicolor/Sbicolor_313_v3.1.gene_exons.gff3"
+    mrna: "/home/maize/shared/databases/genomes/Sorghum_bicolor/Sbicolor_313_v3.1.transcript.fa"
+    prot: "/home/maize/shared/databases/genomes/Sorghum_bicolor/Sbicolor_313_v3.1.protein.fa"

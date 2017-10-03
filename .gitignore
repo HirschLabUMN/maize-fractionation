@@ -1,0 +1,17 @@
+cache/*
+logs/*
+*.swp
+*.gff
+*.bed
+*.fasta
+*.fas
+*.bam
+*.gff3
+*.fastq
+*.sam
+*.o*
+*.e*
+*.vcf
+*.gz
+*.storable
+Icon

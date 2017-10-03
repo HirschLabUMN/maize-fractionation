@@ -1,0 +1,41 @@
+__default__:
+  queue: small
+  l: 'nodes=1:ppn=1,walltime=2:00:00,mem=2gb'
+  N: 'default-snakemake'
+  m: 'a'
+  r: 'n'
+
+bl2seq:
+  queue: small
+  l: 'nodes=1:ppn=1,walltime=7:00:00,mem=2gb'
+  N: 'pairwise-blast'
+  m: 'a'
+  r: 'n'
+
+blast:
+  queue: small
+  l: 'nodes=1:ppn=1,walltime=10:00:00,mem=2gb'
+  N: 'blast'
+  m: 'a'
+  r: 'n'
+
+bowtie2:
+  queue: small
+  l: 'nodes=1:ppn=6,walltime=25:00:00,mem=12gb'
+  N: 'bowtie2-alignment'
+  m: 'a'
+  r: 'n'
+
+blastNA:
+  queue: small
+  l: 'nodes=1:ppn=1,walltime=12:00:00,mem=2gb'
+  N: 'blastNA'
+  m: 'a'
+  r: 'n'
+
+tblastx:
+  queue: small
+  l: 'nodes=1:ppn=1,walltime=16:00:00,mem=2gb'
+  N: 'tblastx'
+  m: 'a'
+  r: 'n'
