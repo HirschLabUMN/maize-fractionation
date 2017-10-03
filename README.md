@@ -2,7 +2,7 @@
 
 See other [README](doc/README.md) for full details.
 
-# Fractionation Project
+## Outline
 
 This project mostly follows the guidelines from the R package -- ProjectTemplate
 
